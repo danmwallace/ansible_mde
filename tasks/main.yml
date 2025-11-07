@@ -1,0 +1,60 @@
+#SPDX-License-Identifier: MIT-0
+---
+#################################################################################################################################################################################
+# Microsoft Defender for Endpoint installation
+# See: https://learn.microsoft.com/en-us/defender-endpoint/linux-install-with-ansible#deploy-defender-for-endpoint-using-ansible-by-configuring-repositories-manually
+#################################################################################################################################################################################
+
+- name: Create MDATP directories
+  ansible.builtin.file:
+    path: /opt/microsoft/mdatp/
+    recurse: true
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+
+- name: Register mdatp_onboard.json
+  ansible.builtin.stat:
+    path: /opt/microsoft/mdatp/mdatp_onboard.json
+  register: mdatp_onboard
+  become: true
+
+- name: Extract WindowsDefenderATPOnboardingPackage.zip into /opt/microsoft/mdatp
+  ansible.builtin.unarchive:
+    src: files/WindowsDefenderATPOnboardingPackage.zip
+    dest: /opt/microsoft/mdatp
+    mode: '0600'
+    owner: root
+    group: root
+  when: not mdatp_onboard.stat.exists
+  become: true
+
+- name: Add Microsoft APT key
+  ansible.builtin.apt_key:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    state: present
+  when: ansible_os_family == "Debian"
+  become: true
+
+- name: Add Microsoft prod APT repository (Debian)
+  when: ansible_distribution == 'Debian'
+  ansible.builtin.deb822_repository:
+    name: packages-microsoft-com-prod
+    types: [deb]
+    uris: "https://packages.microsoft.com/{{ ansible_distribution|lower }}/{{ ansible_distribution_major_version }}/prod"
+    signed_by: "https://packages.microsoft.com/keys/microsoft.asc"
+    suites: ["{{ ansible_distribution_release|lower }}"]
+    components: [main]
+    state: present
+    enabled: true
+  become: true
+
+- name: Install Microsoft Defender for Endpoint on Linux
+  ansible.builtin.apt:
+    name: mdatp
+    state: present
+    update_cache: true
+  become: true
+
